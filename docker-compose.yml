@@ -1,0 +1,31 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3005:3000"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      - prediction-api
+      - causal-llm-api
+    restart: unless-stopped
+
+  prediction-api:
+    build:
+      context: ./services/prediction-api
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  causal-llm-api:
+    build:
+      context: ./services/causal-llm-api
+    env_file:
+      - ./services/causal-llm-api/.env
+    environment:
+      PREDICTION_API_URL: http://prediction-api:8000/predict
+    expose:
+      - "8001"
+    restart: unless-stopped

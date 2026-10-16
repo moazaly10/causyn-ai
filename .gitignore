@@ -1,0 +1,18 @@
+node_modules/
+.next/
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+.env
+.env.*
+!.env.example
+*.joblib
+!services/prediction-api/app/model.joblib
+.DS_Store
+# Local development backups
+*_backup.txt
+*_backup.py
+docker-compose.backup.txt
+docker-compose.backup.txt
+evolus/
