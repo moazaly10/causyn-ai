@@ -1,0 +1,64 @@
+
+# Build the Next.js frontend
+FROM node:22-bookworm-slim AS frontend-builder
+
+WORKDIR /build/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY frontend/ ./
+
+# All three services will run inside one container.
+ENV NEXT_PUBLIC_PREDICTION_API_URL=/api/prediction
+ENV NEXT_PUBLIC_CAUSAL_API_URL=/api/causal
+ENV CAUSYN_PREDICTION_UPSTREAM=http://127.0.0.1:8000
+ENV CAUSYN_CAUSAL_UPSTREAM=http://127.0.0.1:8001
+
+RUN npm run build
+
+
+# Runtime: Node.js frontend plus Python APIs
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH"
+ENV NODE_ENV=production
+
+# Limit scientific-library thread usage on small instances
+ENV OPENBLAS_NUM_THREADS=1
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+
+# Install Python dependencies
+COPY services/prediction-api/requirements.txt /tmp/prediction-requirements.txt
+COPY services/causal-llm-api/requirements.txt /tmp/causal-requirements.txt
+
+RUN pip install --no-cache-dir \
+    -r /tmp/prediction-requirements.txt \
+    -r /tmp/causal-requirements.txt
+
+# Copy both Python APIs and trained model
+COPY services/prediction-api/app/ /app/prediction/app/
+COPY services/causal-llm-api/app/ /app/causal/app/
+
+# Copy the built frontend
+COPY --from=frontend-builder /build/frontend/.next/standalone/ /app/frontend/
+COPY --from=frontend-builder /build/frontend/.next/static/ /app/frontend/.next/static/
+
+# Python APIs communicate locally within the container
+ENV PREDICTION_API_URL=http://127.0.0.1:8000/predict
+
+# The startup script will be created in the next step
+COPY render-start.sh /app/render-start.sh
+
+EXPOSE 10000
+
+CMD ["sh", "/app/render-start.sh"]

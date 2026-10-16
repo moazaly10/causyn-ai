@@ -163,3 +163,8 @@
     transform: none;
   }
 }
+/* AI investigation report disclaimer spacing */
+.panel > .disclaimer {
+  padding: 0 22px 20px;
+  line-height: 1.6;
+}
