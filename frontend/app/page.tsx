@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import {Activity, AlertTriangle, CheckCircle2, Cpu, Gauge, ShieldCheck, Wrench} from "lucide-react";
+import {Activity, AlertTriangle, CheckCircle2, Cpu, Gauge, ShieldCheck, Trash2, Wrench} from "lucide-react";
 import {machines, type Machine} from "../lib/demo";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
@@ -23,6 +23,8 @@ const causalUrl = process.env.NEXT_PUBLIC_CAUSAL_API_URL || "http://localhost:80
 export default function Home(){
  const [selected,setSelected]=useState<Machine>(machines[3]);
  const [fleetMachines, setFleetMachines] = useState<Machine[]>(machines);
+ const [registeredMachineIds, setRegisteredMachineIds] = useState<string[]>([]);
+ const [removeMachineError, setRemoveMachineError] = useState("");
  const [fleetReady, setFleetReady] = useState(false);
  useEffect(() => {
   try {
@@ -33,6 +35,10 @@ export default function Home(){
     const addedMachines = JSON.parse(saved) as Machine[];
 
     if (Array.isArray(addedMachines)) {
+      setRegisteredMachineIds(addedMachines.filter(
+        (machine) => machine && typeof machine.id === "string" &&
+          !machines.some((original) => original.id === machine.id)
+      ).map((machine) => machine.id));
       setFleetMachines([
         ...machines,
         ...addedMachines.filter(
@@ -209,6 +215,7 @@ try {
 }
 
 setFleetMachines(updatedFleet);
+setRegisteredMachineIds((current) => [...current, machineToAdd.id]);
   setFleetResults([]);
   setMachineFormError("");
   setShowMachineForm(false);
@@ -225,6 +232,52 @@ setFleetMachines(updatedFleet);
     wear: 0,
     risk: 0,
   });
+}
+
+const removalBusy = loading || agentLoading || chatLoading || whatIfLoading || fleetLoading;
+const canRemoveSelected = registeredMachineIds.includes(selected.id) &&
+  !machines.some((original) => original.id === selected.id);
+
+function removeSelectedMachine() {
+  // Require registration provenance as well as protecting every seeded demo ID.
+  if (!fleetReady || removalBusy || !canRemoveSelected ||
+      !fleetMachines.some((machine) => machine.id === selected.id)) return;
+
+  if (!window.confirm(
+    `Are you sure you want to remove ${selected.id} from the fleet? This will remove the machine from this browser.`
+  )) return;
+
+  const updatedFleet = fleetMachines.filter((machine) => machine.id !== selected.id);
+  const remainingRegisteredIds = registeredMachineIds.filter((id) => id !== selected.id);
+  const addedMachines = updatedFleet.filter((machine) =>
+    remainingRegisteredIds.includes(machine.id) &&
+    !machines.some((original) => original.id === machine.id)
+  );
+
+  try {
+    localStorage.setItem("causyn-added-machines", JSON.stringify(addedMachines));
+  } catch (error) {
+    console.error("Could not remove machine:", error);
+    setRemoveMachineError("Could not save removal to browser storage. The machine has not been removed.");
+    return;
+  }
+
+  setFleetMachines(updatedFleet);
+  setRegisteredMachineIds(remainingRegisteredIds);
+  setSelected(updatedFleet[0] ?? machines[0]);
+  setFleetResults([]);
+  setFleetError("");
+  setPrediction(null);
+  setCausal(null);
+  setError("");
+  setAgentReport(null);
+  setAgentError("");
+  setChatMessages([]);
+  setChatInput("");
+  setChatError("");
+  setWhatIfResult(null);
+  setWhatIfError("");
+  setRemoveMachineError("");
 }
 
 function createMaintenanceTask() {
@@ -687,7 +740,7 @@ return <div className="shell"><aside className="sidebar">
     </div>
   )}
 </section> <section className="panel" id="register-machine">
-  <div className="panelHead">
+  <div className="panelHead machineRegistrationHeader">
     <div>
       <h2>Machine registration</h2>
       <p>Register a new industrial asset for AI monitoring.</p>
@@ -695,9 +748,10 @@ return <div className="shell"><aside className="sidebar">
     <Cpu size={19} />
   </div>
 
+  <div className="machineRegistrationBody">
   <button
     type="button"
-    className="primary"
+    className="primary machineRegistrationToggle"
     onClick={() => setShowMachineForm(!showMachineForm)}
   >
     {showMachineForm ? "Cancel Registration" : "+ Add New Machine"}
@@ -705,19 +759,13 @@ return <div className="shell"><aside className="sidebar">
 
   {showMachineForm && (
     <form
+      className="machineRegistrationForm"
       onSubmit={(e) => {
         e.preventDefault();
         registerMachine();
       }}
-      style={{ marginTop: 20 }}
     >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-          gap: 16,
-        }}
-      >
+      <div className="machineRegistrationGrid">
         {([
           ["id", "Machine ID", "text"],
           ["name", "Machine Name", "text"],
@@ -802,13 +850,13 @@ return <div className="shell"><aside className="sidebar">
 
       <button
         type="submit"
-        className="primary"
-        style={{ marginTop: 20 }}
+        className="primary machineRegistrationSubmit"
       >
         Register Machine
       </button>
     </form>
   )}
+  </div>
   <section className="panel" id="maintenance-workspace">
   <div className="panelHead">
     <div>
@@ -1139,6 +1187,21 @@ onClick={() => {
 }}
  className={selected.id===m.id?"selected":""}><td><b>{m.name}</b><small>{m.id}</small></td><td>{m.area}</td><td><span className={`status ${m.status.toLowerCase()}`}>{m.status}</span></td><td>{m.wear} min</td><td><div className="risk"><div className="track"><div className={`fill ${m.risk>70?"danger":m.risk>40?"warn":""}`} style={{width:`${m.risk}%`}}/></div><b>{m.risk}%</b></div></td></tr>)}</tbody></table></div></section>
  <div className="columns"><section className="panel"><div className="panelHead"><div><h2>{selected.name}</h2><p>{selected.id} · Latest simulated sensor readings</p></div><span className={`status ${selected.status.toLowerCase()}`}>{selected.status}</span></div><div className="sensors"><div><small>Air temperature</small><strong>{selected.air} K</strong></div><div><small>Process temperature</small><strong>{selected.process} K</strong></div><div><small>Rotational speed</small><strong>{selected.speed} rpm</strong></div><div><small>Torque</small><strong>{selected.torque} Nm</strong></div><div><small>Tool wear</small><strong>{selected.wear} min</strong></div></div>
+{canRemoveSelected && (
+  <div className="machineRemovalActions">
+    <button
+      type="button"
+      className="machineRemovalButton"
+      onClick={removeSelectedMachine}
+      disabled={removalBusy}
+    >
+      <Trash2 size={16} aria-hidden="true" />
+      Remove Machine
+    </button>
+    {removalBusy && <p>Wait for the current operation to finish before removing this machine.</p>}
+    {removeMachineError && <p role="alert">{removeMachineError}</p>}
+  </div>
+)}
 <button
   className="primary"
   disabled={loading || agentLoading || chatLoading}

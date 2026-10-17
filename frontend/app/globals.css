@@ -208,3 +208,99 @@
     flex-basis: 100%;
   }
 }
+
+/* Selected machine removal action */
+.machineRemovalActions {
+  padding: 0 22px 22px;
+}
+
+.machineRemovalButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #70414b;
+  border-radius: 8px;
+  background: transparent;
+  color: #ffb4b4;
+  cursor: pointer;
+}
+
+.machineRemovalButton:hover:not(:disabled) {
+  background: #392128;
+}
+
+.machineRemovalButton:focus-visible {
+  outline: 2px solid #ffb4b4;
+  outline-offset: 3px;
+}
+
+.machineRemovalButton:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.machineRemovalActions p {
+  margin: 12px 0 0;
+  color: #ffb4b4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Machine registration form layout */
+.panelHead.machineRegistrationHeader {
+  padding: 24px 26px;
+}
+
+.machineRegistrationBody {
+  padding: 0 26px 26px;
+}
+
+.machineRegistrationToggle,
+.machineRegistrationSubmit {
+  margin: 0;
+  max-width: 100%;
+}
+
+.machineRegistrationForm {
+  margin-top: 24px;
+}
+
+.machineRegistrationGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 20px;
+}
+
+.machineRegistrationGrid > label {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.machineRegistrationGrid input,
+.machineRegistrationGrid select {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  font: inherit;
+}
+
+.machineRegistrationGrid input:focus-visible,
+.machineRegistrationGrid select:focus-visible {
+  outline: 2px solid #4ac5d9;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(74, 197, 217, 0.12);
+}
+
+.machineRegistrationSubmit {
+  margin-top: 24px;
+}
+
+@media (max-width: 520px) {
+  .machineRegistrationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
