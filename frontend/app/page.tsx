@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {Activity, AlertTriangle, CheckCircle2, Cpu, Gauge, ShieldCheck, Trash2, Wrench} from "lucide-react";
 import {machines, type Machine} from "../lib/demo";
 import ReactMarkdown from "react-markdown";
@@ -20,8 +20,14 @@ type MaintenanceTask = {
 };
 const predictionUrl = process.env.NEXT_PUBLIC_PREDICTION_API_URL || "http://localhost:8000";
 const causalUrl = process.env.NEXT_PUBLIC_CAUSAL_API_URL || "http://localhost:8001";
+// Only reuse an ML result for the exact machine and sensor readings analyzed.
+function predictionKey(machine: Machine) {
+  return JSON.stringify([machine.id, machine.air, machine.process, machine.speed, machine.torque, machine.wear]);
+}
 export default function Home(){
  const [selected,setSelected]=useState<Machine>(machines[3]);
+ const selectedKey = useRef(predictionKey(selected));
+ selectedKey.current = predictionKey(selected);
  const [fleetMachines, setFleetMachines] = useState<Machine[]>(machines);
  const [registeredMachineIds, setRegisteredMachineIds] = useState<string[]>([]);
  const [removeMachineError, setRemoveMachineError] = useState("");
@@ -138,7 +144,11 @@ useEffect(() => {
     console.error("Could not save maintenance tasks:", error);
   }
 }, [maintenanceTasks, maintenanceReady]);
- const [prediction,setPrediction]=useState<Prediction|null>(null);
+ const [predictions, setPredictions] = useState<Record<string, Prediction>>({});
+ const prediction = predictions[predictionKey(selected)] ?? null;
+ function cachePrediction(machine: Machine, result: Prediction) {
+   setPredictions((current) => ({ ...current, [predictionKey(machine)]: result }));
+ }
  const [causal,setCausal]=useState<Causal|null>(null);
  const [error,setError]=useState("");
  const [loading,setLoading]=useState(false);
@@ -156,6 +166,10 @@ const [chatError, setChatError] = useState("");
 const [fleetResults, setFleetResults] = useState<FleetResult[]>([]);
 const [fleetLoading, setFleetLoading] = useState(false);
 const [fleetError, setFleetError] = useState("");
+const rankedFleetResults = fleetResults.map((result) => ({
+  ...result,
+  prediction: predictions[predictionKey(result.machine)] ?? result.prediction,
+})).sort((a, b) => b.prediction.risk_score - a.prediction.risk_score);
 
 function registerMachine() {
   const id = newMachine.id.trim().toUpperCase();
@@ -267,7 +281,11 @@ function removeSelectedMachine() {
   setSelected(updatedFleet[0] ?? machines[0]);
   setFleetResults([]);
   setFleetError("");
-  setPrediction(null);
+  setPredictions((current) => {
+    const remaining = { ...current };
+    delete remaining[predictionKey(selected)];
+    return remaining;
+  });
   setCausal(null);
   setError("");
   setAgentReport(null);
@@ -328,6 +346,7 @@ function updateMaintenanceStatus(
 }
 
 async function runWhatIfSimulation() {
+  const requestKey = predictionKey(selected);
   setWhatIfLoading(true);
   setWhatIfError("");
   setWhatIfResult(null);
@@ -386,9 +405,10 @@ async function runWhatIfSimulation() {
     const baseline: Prediction = await baselineResponse.json();
     const simulated: Prediction = await simulatedResponse.json();
 
-    setWhatIfResult({ baseline, simulated });
+    cachePrediction(selected, baseline);
+    if (selectedKey.current === requestKey) setWhatIfResult({ baseline, simulated });
   } catch (error) {
-    setWhatIfError(
+    if (selectedKey.current === requestKey) setWhatIfError(
       error instanceof Error ? error.message : "Simulation failed."
     );
   } finally {
@@ -429,6 +449,7 @@ async function scanFleet() {
       }
 
       const prediction: Prediction = await response.json();
+      cachePrediction(machine, prediction);
 
       results.push({
         machine,
@@ -450,14 +471,14 @@ async function scanFleet() {
   }
 }
 
- async function analyze(){setLoading(true);setError("");setPrediction(null);setCausal(null);
+ async function analyze(){setLoading(true);setError("");setCausal(null);
  setAgentReport(null);
  setAgentError("");
   const input={machine_id:selected.id,air_temperature:selected.air,process_temperature:selected.process,rotational_speed:selected.speed,torque:selected.torque,tool_wear:selected.wear};
   try{
    const [p,c]=await Promise.all([fetch(`${predictionUrl}/predict`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)}),fetch(`${causalUrl}/causal/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)})]);
    if(!p.ok||!c.ok)throw new Error(`API error: prediction ${p.status}, causal ${c.status}. Check both Python services.`);
-   setPrediction(await p.json());setCausal(await c.json());
+   cachePrediction(selected, await p.json());setCausal(await c.json());
   }catch(e){setError(e instanceof Error?e.message:"Unexpected error");}finally{setLoading(false)}
  }
 
@@ -493,7 +514,7 @@ async function investigateWithAI() {
     const result = await response.json();
 
     // Also show the ML prediction returned by the agent.
-    setPrediction(result.prediction);
+    cachePrediction(selected, result.prediction);
 
     if (result.llm_status === "success" && result.llm_report) {
       setAgentReport(result.llm_report);
@@ -556,7 +577,7 @@ async function sendChatMessage() {
       throw new Error("AI Copilot returned an empty answer.");
     }
 
-    setPrediction(result.prediction);
+    cachePrediction(selected, result.prediction);
 
     setChatMessages((previous) => [
       ...previous,
@@ -695,13 +716,13 @@ return <div className="shell"><aside className="sidebar">
   </button>
 
   {fleetError && (
-    <p style={{ color: "#ff8585", marginTop: 12 }}>
+    <p className="fleetScanError" role="alert">
       {fleetError}
     </p>
   )}
 
   {fleetResults.length > 0 && (
-    <div style={{ marginTop: 20 }}>
+    <div className="fleetRanking">
       <h3>Fleet risk ranking</h3>
       <p>
         Machines ranked from highest to lowest model risk score.
@@ -719,7 +740,7 @@ return <div className="shell"><aside className="sidebar">
           </thead>
 
           <tbody>
-            {fleetResults.map((result, index) => (
+            {rankedFleetResults.map((result, index) => (
               <tr key={result.machine.id}>
                 <td>#{index + 1}</td>
                 <td>{result.machine.id}</td>
@@ -733,7 +754,7 @@ return <div className="shell"><aside className="sidebar">
         </table>
       </div>
 
-      <p style={{ fontSize: 12, opacity: 0.7, marginTop: 12 }}>
+      <p className="fleetRankingDisclaimer">
         Risk scores are uncalibrated model estimates based on
         simulated machine readings, not confirmed failure probabilities.
       </p>
@@ -1125,9 +1146,9 @@ return <div className="shell"><aside className="sidebar">
               Original Risk Score
             </small>
             <div style={{ fontSize: 32, fontWeight: 700 }}>
-              {whatIfResult.baseline.risk_score.toFixed(2)}
+              {(prediction ?? whatIfResult.baseline).risk_score.toFixed(2)}
             </div>
-            <small>{whatIfResult.baseline.risk_level}</small>
+            <small>{(prediction ?? whatIfResult.baseline).risk_level}</small>
           </div>
 
           <div>
@@ -1147,7 +1168,7 @@ return <div className="shell"><aside className="sidebar">
             <div style={{ fontSize: 32, fontWeight: 700 }}>
               {(
                 whatIfResult.simulated.risk_score -
-                whatIfResult.baseline.risk_score
+                (prediction ?? whatIfResult.baseline).risk_score
               ).toFixed(2)}
             </div>
             <small>Simulated minus original</small>
@@ -1171,12 +1192,11 @@ return <div className="shell"><aside className="sidebar">
   </div>
 </section>
 
-</section><section className="panel" id="machine-fleet"><div className="panelHead"><div><h2>Machine fleet</h2><p>Select a machine to inspect its readings.</p></div><span className="tag">{fleetMachines.length} assets</span></div><div className="tableWrap"><table><thead><tr><th>ASSET</th><th>AREA</th><th>STATUS</th><th>TOOL WEAR</th><th>DEMO RISK</th></tr></thead><tbody>{fleetMachines.map(m=><tr key={m.id} 
+</section><section className="panel" id="machine-fleet"><div className="panelHead"><div><h2>Machine fleet</h2><p>Select a machine to inspect its readings. ML scores are uncalibrated; status labels are demo indicators.</p></div><span className="tag">{fleetMachines.length} assets</span></div><div className="tableWrap"><table><thead><tr><th>ASSET</th><th>AREA</th><th>STATUS</th><th>TOOL WEAR</th><th>ML SCORE</th></tr></thead><tbody>{fleetMachines.map(m=><tr key={m.id}
 onClick={() => {
   if (agentLoading || loading || chatLoading) return;
 
   setSelected(m);
-  setPrediction(null);
   setCausal(null);
   setError("");
   setAgentReport(null);
@@ -1185,7 +1205,7 @@ onClick={() => {
   setChatInput("");
   setChatError("");
 }}
- className={selected.id===m.id?"selected":""}><td><b>{m.name}</b><small>{m.id}</small></td><td>{m.area}</td><td><span className={`status ${m.status.toLowerCase()}`}>{m.status}</span></td><td>{m.wear} min</td><td><div className="risk"><div className="track"><div className={`fill ${m.risk>70?"danger":m.risk>40?"warn":""}`} style={{width:`${m.risk}%`}}/></div><b>{m.risk}%</b></div></td></tr>)}</tbody></table></div></section>
+ className={selected.id===m.id?"selected":""}><td><b>{m.name}</b><small>{m.id}</small></td><td>{m.area}</td><td><span className={`status ${m.status.toLowerCase()}`}>{m.status}</span></td><td>{m.wear} min</td><td>{predictions[predictionKey(m)] ? <div className="risk"><div className="track"><div className={`fill ${predictions[predictionKey(m)].risk_score>=0.7?"danger":predictions[predictionKey(m)].risk_score>=0.4?"warn":""}`} style={{width:`${predictions[predictionKey(m)].risk_score*100}%`}}/></div><b>{Math.round(predictions[predictionKey(m)].risk_score*100)}%</b></div> : <span>Not analyzed</span>}</td></tr>)}</tbody></table></div></section>
  <div className="columns"><section className="panel"><div className="panelHead"><div><h2>{selected.name}</h2><p>{selected.id} · Latest simulated sensor readings</p></div><span className={`status ${selected.status.toLowerCase()}`}>{selected.status}</span></div><div className="sensors"><div><small>Air temperature</small><strong>{selected.air} K</strong></div><div><small>Process temperature</small><strong>{selected.process} K</strong></div><div><small>Rotational speed</small><strong>{selected.speed} rpm</strong></div><div><small>Torque</small><strong>{selected.torque} Nm</strong></div><div><small>Tool wear</small><strong>{selected.wear} min</strong></div></div>
 {canRemoveSelected && (
   <div className="machineRemovalActions">
@@ -1202,6 +1222,7 @@ onClick={() => {
     {removeMachineError && <p role="alert">{removeMachineError}</p>}
   </div>
 )}
+{prediction && <div className="insights"><div className="prediction">ML score: <b>{prediction.risk_score.toFixed(2)} ({Math.round(prediction.risk_score * 100)}%) · {prediction.risk_level}</b><small>{prediction.message}</small></div></div>}
 <button
   className="primary"
   disabled={loading || agentLoading || chatLoading}

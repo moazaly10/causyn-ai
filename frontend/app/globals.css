@@ -209,6 +209,62 @@
   }
 }
 
+/* Fleet ranking spacing stays scoped to the scan panel. */
+#fleet-scan > .panelHead {
+  padding: 24px 26px;
+}
+
+#fleet-scan > .primary {
+  margin: 0 26px 24px;
+  max-width: calc(100% - 52px);
+}
+
+.fleetScanError {
+  margin: 0 26px 24px;
+  color: #ff8585;
+}
+
+.fleetRanking {
+  padding: 0 26px 26px;
+  min-width: 0;
+}
+
+.fleetRanking h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.fleetRanking > p {
+  margin: 0 0 20px;
+  color: #9aabc0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fleetRanking .tableWrap {
+  border: 1px solid #273448;
+  border-radius: 9px;
+}
+
+.fleetRanking table {
+  min-width: 420px;
+}
+
+.fleetRanking th,
+.fleetRanking td {
+  padding: 16px;
+}
+
+.fleetRanking tbody tr {
+  cursor: default;
+}
+
+.fleetRanking > .fleetRankingDisclaimer {
+  margin: 16px 0 0;
+  color: #8393aa;
+  font-size: 12px;
+}
+
 /* Selected machine removal action */
 .machineRemovalActions {
   padding: 0 22px 22px;
