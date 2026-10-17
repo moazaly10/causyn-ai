@@ -168,3 +168,43 @@
   padding: 0 22px 20px;
   line-height: 1.6;
 }
+/* CAUSYN AI clickable home logo */
+.brand {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.brand:hover {
+  opacity: 0.9;
+}
+
+.brand:focus-visible {
+  outline: 2px solid #4ac5d9;
+  outline-offset: 5px;
+  border-radius: 8px;
+}
+
+/* CAUSYN AI — Symmetrical What-If Simulation buttons */
+.whatIfActions {
+  width: 100%;
+  max-width: 500px;
+}
+
+.whatIfActions > button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 50px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .whatIfActions > button {
+    flex-basis: 100%;
+  }
+}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {Activity, AlertTriangle, CheckCircle2, Cpu, Gauge, ShieldCheck, Wrench} from "lucide-react";
 import {machines, type Machine} from "../lib/demo";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 type Prediction = {risk_score:number; risk_level:string; predicted_failure:boolean; mode:string; message:string};
 type FleetResult = {
   machine: Machine;
@@ -588,7 +589,21 @@ async function sendChatMessage() {
   );
 }
 
-return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandIcon"><Activity size={22}/></div><div><strong>CAUSYN <span>AI</span></strong><small>Predict. Understand. Prevent.</small></div></div><div className="navTitle">WORKSPACE</div><div className="nav active"><Gauge size={17}/> Overview</div><a className="nav" href="#machine-fleet" style={{ textDecoration: "none", color: "inherit" }}>
+
+return <div className="shell"><aside className="sidebar">
+  <Link href="/" className="brand" aria-label="CAUSYN AI Home">
+    <div className="brandIcon">
+      <Activity size={22} />
+    </div>
+
+    <div>
+      <strong>CAUSYN <span>AI</span></strong>
+      <small>Predict. Understand. Prevent.</small>
+    </div>
+  </Link>
+
+  <div className="navTitle">WORKSPACE</div>
+ <div className="nav active"><Gauge size={17}/> Overview</div><a className="nav" href="#machine-fleet" style={{ textDecoration: "none", color: "inherit" }}>
   <Cpu size={17}/> Machines
 </a><a
   className="nav"
@@ -987,6 +1002,7 @@ return <div className="shell"><aside className="sidebar"><div className="brand">
     </div>
 
     <div
+      className="whatIfActions"
       style={{
         display: "flex",
         gap: 12,
@@ -1260,7 +1276,7 @@ onClick={() => {
         id="copilot-question"
         value={chatInput}
         onChange={(event) => setChatInput(event.target.value)}
-        placeholder="What should I inspect first?"
+        placeholder="Ask CAUSYN AI"
         maxLength={1000}
         rows={3}
         disabled={chatLoading || agentLoading || loading}
